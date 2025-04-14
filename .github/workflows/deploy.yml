@@ -28,12 +28,8 @@ jobs:
           git rm -rf .
           
           # Get necessary files from main
-          git checkout main -- templates/index.html
+          git checkout main -- index.html
           git checkout main -- static/
-          
-          # Move files to root
-          mv templates/index.html ./index.html
-          rm -rf templates
           
           # Stage and commit
           git add index.html static/
