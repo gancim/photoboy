@@ -23,11 +23,20 @@ jobs:
 
       - name: Create gh-pages branch
         run: |
+          # Create new orphan branch
           git checkout --orphan gh-pages
           git rm -rf .
-          git checkout main templates/
-          git checkout main static/
-          git add templates/ static/
+          
+          # Get necessary files from main
+          git checkout main -- templates/index.html
+          git checkout main -- static/
+          
+          # Move files to root
+          mv templates/index.html ./index.html
+          rm -rf templates
+          
+          # Stage and commit
+          git add index.html static/
           git commit -m "Deploy to GitHub Pages"
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
           git push -f origin gh-pages 
