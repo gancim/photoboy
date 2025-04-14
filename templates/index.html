@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PhotoBoy - Game Boy Photo Converter</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../static/css/style.css">
+</head>
+<body>
+    <div class="gameboy">
+        <div class="gameboy-top">
+            <div class="power-light"></div>
+        </div>
+        <div class="gameboy-screen">
+            <div class="screen-border">
+                <div class="screen-content">
+                    <h1>PHOTOBOY</h1>
+                    <div class="upload-container">
+                        <form id="upload-form">
+                            <div class="file-input-container">
+                                <input type="file" id="image" name="image" accept="image/*" required>
+                                <label for="image" class="file-label">SELECT PHOTO</label>
+                            </div>
+                            <button type="submit" class="convert-btn">CONVERT</button>
+                        </form>
+                    </div>
+                    <div class="result-container">
+                        <div class="image-container">
+                            <h2>ORIGINAL</h2>
+                            <img id="original-image" src="" alt="Original photo" style="display: none;">
+                        </div>
+                        <div class="image-container">
+                            <h2>GAME BOY</h2>
+                            <canvas id="result-canvas" style="display: none;"></canvas>
+                            <canvas id="scanline-canvas" style="display: none;"></canvas>
+                            <img id="result-image" src="" alt="Game Boy version" style="display: none;">
+                        </div>
+                    </div>
+                    <div class="share-container">
+                        <button id="download-btn" class="share-btn" disabled>SAVE</button>
+                        <button id="share-btn" class="share-btn" disabled>SHARE</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="gameboy-controls">
+            <div class="controls-left">
+                <div class="d-pad">
+                    <div class="d-pad-center"></div>
+                    <div class="d-pad-up"></div>
+                    <div class="d-pad-right"></div>
+                    <div class="d-pad-down"></div>
+                    <div class="d-pad-left"></div>
+                </div>
+            </div>
+            <div class="controls-center">
+                <div class="menu-buttons">
+                    <button class="select-btn">SELECT</button>
+                    <button class="start-btn">START</button>
+                </div>
+            </div>
+            <div class="controls-right">
+                <div class="action-buttons">
+                    <div class="button-container">
+                        <div class="button-a">A</div>
+                        <div class="button-b">B</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="gameboy-speaker">
+            <div class="speaker-holes"></div>
+        </div>
+    </div>
+    <script>
+        // Game Boy color palette
+        const gameboyPalette = [
+            [0x0F, 0x38, 0x0F], // Darkest
+            [0x30, 0x62, 0x30], // Dark
+            [0x8B, 0xAC, 0x0F], // Light
+            [0x9B, 0xBC, 0x0F]  // Lightest
+        ];
+
+        const PIXEL_SIZE = 4; // Medium size by default
+
+        function findClosestColor(r, g, b) {
+            let minDistance = Infinity;
+            let closestColor = [0, 0, 0];
+            
+            for (const color of gameboyPalette) {
+                const distance = Math.sqrt(
+                    Math.pow(r - color[0], 2) +
+                    Math.pow(g - color[1], 2) +
+                    Math.pow(b - color[2], 2)
+                );
+                
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestColor = color;
+                }
+            }
+            
+            return closestColor;
+        }
+
+        function applyPixelation(imageData, width, height) {
+            const data = imageData.data;
+            const stride = width * 4;
+            
+            for (let y = 0; y < height; y += PIXEL_SIZE) {
+                for (let x = 0; x < width; x += PIXEL_SIZE) {
+                    const i = (y * stride) + (x * 4);
+                    const r = data[i];
+                    const g = data[i + 1];
+                    const b = data[i + 2];
+                    
+                    const closestColor = findClosestColor(r, g, b);
+                    
+                    for (let py = 0; py < PIXEL_SIZE && y + py < height; py++) {
+                        for (let px = 0; px < PIXEL_SIZE && x + px < width; px++) {
+                            const pi = ((y + py) * stride) + ((x + px) * 4);
+                            data[pi] = closestColor[0];
+                            data[pi + 1] = closestColor[1];
+                            data[pi + 2] = closestColor[2];
+                        }
+                    }
+                }
+            }
+        }
+
+        function createScanlines(canvas) {
+            const scanlineCanvas = document.getElementById('scanline-canvas');
+            const ctx = scanlineCanvas.getContext('2d');
+            
+            scanlineCanvas.width = canvas.width;
+            scanlineCanvas.height = canvas.height;
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            for (let y = 0; y < canvas.height; y += 2) {
+                ctx.fillRect(0, y, canvas.width, 1);
+            }
+        }
+
+        function convertToGameBoy(imageData) {
+            const canvas = document.getElementById('result-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = imageData.width;
+            canvas.height = imageData.height;
+            
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = imageData.width;
+            tempCanvas.height = imageData.height;
+            
+            tempCtx.drawImage(imageData, 0, 0);
+            
+            const imageDataObj = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            applyPixelation(imageDataObj, canvas.width, canvas.height);
+            
+            ctx.putImageData(imageDataObj, 0, 0);
+            
+            createScanlines(canvas);
+            
+            const scanlineCanvas = document.getElementById('scanline-canvas');
+            ctx.drawImage(scanlineCanvas, 0, 0);
+            
+            // Convert the canvas to a blob
+            canvas.toBlob(function(blob) {
+                const resultImage = document.getElementById('result-image');
+                // Create a blob URL
+                const blobUrl = URL.createObjectURL(blob);
+                resultImage.src = blobUrl;
+                resultImage.style.display = 'block';
+                
+                // Store the blob URL for sharing
+                resultImage.dataset.blobUrl = blobUrl;
+                
+                document.getElementById('download-btn').disabled = false;
+                document.getElementById('share-btn').disabled = false;
+            }, 'image/png');
+            
+            canvas.style.display = 'none';
+            scanlineCanvas.style.display = 'none';
+        }
+
+        // Event listeners
+        document.getElementById('image').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const originalImage = document.getElementById('original-image');
+                    originalImage.src = e.target.result;
+                    originalImage.style.display = 'block';
+                    document.getElementById('result-image').style.display = 'none';
+                    document.getElementById('download-btn').disabled = true;
+                    document.getElementById('share-btn').disabled = true;
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.getElementById('upload-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('image');
+            const file = fileInput.files[0];
+            
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        convertToGameBoy(img);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.getElementById('download-btn').addEventListener('click', function() {
+            const link = document.createElement('a');
+            link.download = 'photoboy.png';
+            link.href = document.getElementById('result-image').dataset.blobUrl;
+            link.click();
+        });
+
+        document.getElementById('share-btn').addEventListener('click', async function() {
+            const resultImage = document.getElementById('result-image');
+            const blobUrl = resultImage.dataset.blobUrl;
+            
+            try {
+                const response = await fetch(blobUrl);
+                const blob = await response.blob();
+                const file = new File([blob], 'photoboy.png', { type: 'image/png' });
+                
+                if (navigator.share && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: 'My PhotoBoy Creation',
+                        text: 'Check out my photo in Game Boy style!',
+                        files: [file]
+                    });
+                } else if (navigator.clipboard && navigator.clipboard.write) {
+                    // Fallback: Copy image to clipboard
+                    try {
+                        await navigator.clipboard.write([
+                            new ClipboardItem({
+                                'image/png': blob
+                            })
+                        ]);
+                        alert('Image copied to clipboard!');
+                    } catch (err) {
+                        console.error('Failed to copy to clipboard:', err);
+                        // Final fallback: download the image
+                        const link = document.createElement('a');
+                        link.download = 'photoboy.png';
+                        link.href = blobUrl;
+                        link.click();
+                    }
+                } else {
+                    // If no sharing options are available, download the image
+                    const link = document.createElement('a');
+                    link.download = 'photoboy.png';
+                    link.href = blobUrl;
+                    link.click();
+                }
+            } catch (err) {
+                console.error('Error sharing:', err);
+                alert('Unable to share. You can download the image instead.');
+            }
+        });
+
+        // Clean up blob URLs when the page is unloaded
+        window.addEventListener('unload', function() {
+            const resultImage = document.getElementById('result-image');
+            if (resultImage.dataset.blobUrl) {
+                URL.revokeObjectURL(resultImage.dataset.blobUrl);
+            }
+        });
+    </script>
+</body>
+</html> 
